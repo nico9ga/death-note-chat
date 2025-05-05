@@ -12,11 +12,36 @@ export interface Message {
 export type VictimStatus = 'executed' | 'failed' | 'cancelled';
 
 export interface Victim {
-  id: number;
+  id: string; 
   name: string;
-  cause: string;
-  details: string;
+  lastName: string;
+  deathType?: string;
+  details?: string; 
   image?: string;
+  images?: string[]; 
+  deathTime: string;
+  status: VictimStatus;
+}
+
+
+export interface CreateVictimRequest {
+  name: string;
+  lastName: string;
+  deathType?: string;
+  images?: string[];
+}
+
+export interface AddDeathDetailsRequest {
+  details: string;
+}
+
+export interface VictimResponse {
+  id: string;
+  name: string;
+  lastName: string;
+  deathType?: string;
+  details?: string;
+  images?: string[];
   deathTime: string;
   status: VictimStatus;
 }

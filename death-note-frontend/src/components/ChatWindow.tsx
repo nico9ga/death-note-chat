@@ -6,7 +6,8 @@ import { Message, Victim, SenderType } from '../types';
 interface ChatWindowProps {
     victims: Victim[];
     setVictims: React.Dispatch<React.SetStateAction<Victim[]>>;
-  }
+}
+
 
 const ChatContainer = styled.div`
   margin-left: 80px;
@@ -117,241 +118,366 @@ const TimerDisplay = styled.div`
   margin-left: auto;
 `;
 const ChatWindow: React.FC<ChatWindowProps> = ({ victims, setVictims }) => {
-    const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Message[]>([
       {
-        id: 1,
-        text: "Bienvenido a la Death Note. Reglas:\n\n1. Escribe el nombre completo\n2. Sube una foto (opcional)\n3. Tienes 40 segundos para la causa\n4. 6m40s para detalles",
-        sender: 'system',
-        isInstruction: true
+          id: 1,
+          text: "Bienvenido a la Death Note. Reglas:\n\n1. Escribe el nombre completo\n2. Sube una foto (opcional)\n3. Tienes 40 segundos para la causa\n4. 6m40s para detalles",
+          sender: 'system',
+          isInstruction: true
       },
       {
-        id: 2,
-        text: "Escribe el nombre completo:",
-        sender: 'system',
+          id: 2,
+          text: "Escribe el nombre completo (Nombre y Apellido):",
+          sender: 'system',
       }
+  ]);
+  
+  const [inputValue, setInputValue] = useState('');
+  const [victim, setVictim] = useState<Partial<Victim>>({});
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [victimId, setVictimId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  type Step = 'name' | 'image' | 'cause' | 'details' | 'confirmation';
+  const [currentStep, setCurrentStep] = useState<Step>('name');
+
+  useEffect(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  const startTimer = (seconds: number) => {
+      setTimeLeft(seconds);
+  };
+
+  const createVictim = async (name: string, lastName: string, deathType?: string, image?: string) => {
+      try {
+          const response = await fetch('http://localhost:3000/api/victim', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                  name,
+                  lastName,
+                  deathType,
+                  images: image ? [image] : []
+              })
+          });
+
+          if (!response.ok) {
+              throw new Error('Error al crear la víctima');
+          }
+
+          const data = await response.json();
+          return data.id;
+      } catch (error) {
+          console.error('Error:', error);
+          return null;
+      }
+  };
+
+  const addDeathDetails = async (id: string, details: string) => {
+      try {
+          const response = await fetch(`http://localhost:3000/api/victim/deathdetails/${id}`, {
+              method: 'PATCH',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                  details
+              })
+          });
+
+          if (!response.ok) {
+              throw new Error('Error al añadir detalles');
+          }
+
+          return await response.json();
+      } catch (error) {
+          console.error('Error:', error);
+          return null;
+      }
+  };
+
+  const handleSubmit = async () => {
+    if (!inputValue.trim() && currentStep !== 'image') return;
+  
+    const userMessage: Message = {
+      id: Date.now(),
+      text: inputValue,
+      sender: 'user'
+    };
+  
+    const newMessages = [...messages, userMessage];
+    let systemMessage: Message = { id: Date.now() + 1, text: "", sender: 'system' };
+  
+    switch(currentStep) {
+      case 'name':
+        const nameParts = inputValue.split(' ');
+        if (nameParts.length < 2) {
+          systemMessage.text = "Debes ingresar nombre y apellido. Intenta de nuevo:";
+          setMessages([...newMessages, systemMessage]);
+          setInputValue('');
+          return;
+        }
+        
+        const name = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ');
+        setVictim(prev => ({ ...prev, name, lastName }));
+        systemMessage.text = "¿Quieres subir una foto? (Opcional - 40s)";
+        setCurrentStep('image');
+        startTimer(40);
+        break;
+        
+      case 'image':
+        systemMessage.text = "Especifica la causa de muerte (Opcional - 40s):";
+        setCurrentStep('cause');
+        startTimer(40);
+        break;
+        
+        case 'cause':
+          // Guardar causa solo si se ingresó
+          const deathType = inputValue.trim() ? inputValue : 'Heart Attack';
+          setVictim(prev => ({ ...prev, deathType }));
+          
+          const id = await createVictim(
+            victim.name || '',
+            victim.lastName || '',
+            deathType,
+            victim.image // Asegurar que enviamos la imagen
+          );
+          
+          if (id) {
+            setVictimId(id);
+            if (inputValue.trim()) {
+              systemMessage.text = "Detalla la muerte (Opcional - 6m40s):";
+              setCurrentStep('details');
+              startTimer(400);
+            } else {
+              systemMessage.text = "Ejecutando sentencia (40s)...";
+              setCurrentStep('confirmation');
+              startTimer(40);
+            }
+          } else {
+          systemMessage.text = "Error al registrar la víctima. Intenta de nuevo.";
+          resetProcess();
+        }
+        break;
+        
+      case 'details':
+        if (!victimId) {
+          systemMessage.text = "Error: No se encontró el ID de la víctima";
+          resetProcess();
+          return;
+        }
+        
+        // Enviar detalles solo si se especificaron
+        const detailsResult = inputValue.trim() 
+          ? await addDeathDetails(victimId, inputValue)
+          : true;
+  
+        if (detailsResult) {
+          systemMessage.text = "Ejecutando sentencia (40s)...";
+          setCurrentStep('confirmation');
+          startTimer(40);
+        } else {
+          systemMessage.text = "Error al añadir detalles de la muerte";
+          resetProcess();
+        }
+        break;
+        
+      case 'confirmation':
+        const finalVictim: Victim = {
+          ...victim as Victim,
+          id: victimId || Date.now().toString(),
+          deathTime: new Date().toLocaleString(),
+          deathType: victim.deathType || "Heart Attack", // Valor por defecto
+          details: victim.details
+        };
+  
+        systemMessage.text = `¡${victim.name} ${victim.lastName} ha sido eliminado!`;
+        setVictims(prev => [...prev, finalVictim]);
+        resetProcess();
+        break;
+    }
+  
+    setMessages([...newMessages, systemMessage]);
+    setInputValue('');
+  };
+  
+  // Función auxiliar para resetear el estado
+  const resetProcess = () => {
+    setVictim({});
+    setImagePreview(null);
+    setCurrentStep('name');
+    setTimeLeft(0);
+    setVictimId(null);
+    setInputValue('');
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+  
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const imageUrl = reader.result as string;
+      setImagePreview(imageUrl);
+      // Actualizamos el estado completo de la víctima
+      setVictim(prev => ({ 
+        ...prev, 
+        image: imageUrl,
+        name: prev.name || '',
+        lastName: prev.lastName || ''
+      }));
+      
+      setMessages(prev => [...prev, 
+        { id: Date.now(), text: "Imagen subida ✅", sender: 'user' },
+        { id: Date.now() + 1, text: "Especifica la causa de muerte (40s restantes):", sender: 'system' }
+      ]);
+      
+      setCurrentStep('cause');
+      startTimer(40);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleTimeout = async () => {
+    if (!victim.name || !victim.lastName) return;
+  
+    let finalVictim: Victim | null = null;
+    let resultMessage: string;
+  
+    // Caso 1: Ya tenemos victimId (paso de detalles)
+    if (victimId) {
+      const details = currentStep === 'details' 
+        ? `Muerte por ${victim.deathType || 'ataque cardiaco'} (detalles no especificados)`
+        : victim.details || '';
+      
+      if (currentStep === 'details') {
+        await addDeathDetails(victimId, details);
+      }
+  
+      finalVictim = {
+        ...victim as Victim,
+        id: victimId,
+        deathTime: new Date().toLocaleString(),
+        deathType: victim.deathType || 'Heart Attack',
+        details: details
+      };
+      
+      resultMessage = `💀 ${victim.name} ${victim.lastName} eliminado - ${victim.deathType || 'ataque cardiaco'}`;
+    }
+    // Caso 2: No tenemos victimId pero sí imagen
+    else if (victim.image) {
+      const id = await createVictim(
+        victim.name,
+        victim.lastName,
+        victim.deathType || 'Heart Attack',
+        victim.image
+      );
+      
+      if (id) {
+        finalVictim = {
+          ...victim as Victim,
+          id,
+          deathTime: new Date().toLocaleString(),
+          deathType: victim.deathType || 'Heart Attack',
+          details: victim.details || `Muerte por ${victim.deathType || 'ataque cardiaco'}`
+        };
+        resultMessage = `💀 ${victim.name} ${victim.lastName} eliminado por ${victim.deathType || 'ataque cardiaco'}`;
+      } else {
+        resultMessage = "Error al registrar la víctima (tiempo agotado)";
+      }
+    }
+    // Caso 3: No hay imagen
+    else {
+      resultMessage = "⏰ Registro fallido: Se requiere al menos una imagen";
+    }
+  
+    setMessages(prev => [...prev, 
+      { id: Date.now(), text: resultMessage, sender: 'system' }
     ]);
     
-    const [inputValue, setInputValue] = useState('');
-    const [currentStep, setCurrentStep] = useState<'name' | 'image' | 'cause' | 'details'>('name');
-    const [victim, setVictim] = useState<Partial<Victim>>({});
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [timeLeft, setTimeLeft] = useState(0);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, [messages]);
+    if (finalVictim) {
+      setVictims(prev => [...prev, finalVictim as Victim]);
+    }
     
-    useEffect(() => {
+    // Resetear el proceso
+    setVictim({});
+    setImagePreview(null);
+    setCurrentStep('name');
+    setTimeLeft(0);
+    setVictimId(null);
+  };
+
+  useEffect(() => {
     if (timeLeft <= 0) {
-        if (currentStep !== 'name') {
+      if (currentStep !== 'name') {
         handleTimeout();
-        }
-        return;
+      }
+      return;
     }
     
     const timer = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
+      setTimeLeft(prev => prev - 1);
     }, 1000);
-
+  
     return () => clearInterval(timer);
-    }, [timeLeft, currentStep]);
-
-    const startTimer = (seconds: number) => {
-    setTimeLeft(seconds);
-    };
-  
-    const handleSubmit = () => {
-      if (!inputValue.trim() && currentStep !== 'image') return;
-  
-      const userMessage: Message = {
-        id: Date.now(),
-        text: inputValue,
-        sender: 'user'
-      };
-  
-      const newMessages = [...messages, userMessage];
-  
-      let systemMessage: Message = {
-        id: Date.now() + 1,
-        text: "",
-        sender: 'system'
-      };
-  
-      switch(currentStep) {
-        case 'name':
-          setVictim(prev => ({ ...prev, name: inputValue }));
-          systemMessage.text = "¿Quieres subir una foto? (Opcional - 40s)";
-          setCurrentStep('image');
-          startTimer(40);
-          break;
-        case 'image':
-          systemMessage.text = "Foto omitida. Registro fallido: Se requiere al menos una imagen";
-          setMessages([...newMessages, systemMessage]);
-          setVictim({});
-          setCurrentStep('name');
-          setTimeLeft(0);
-          return;
-        case 'cause':
-          setVictim(prev => ({ ...prev, cause: inputValue }));
-          systemMessage.text = "Detalla la muerte (6m40s restantes):";
-          setCurrentStep('details');
-          startTimer(400);
-          break;
-        case 'details':
-          const finalVictim: Victim = {
-            ...victim as Victim,
-            id: Date.now(),
-            deathTime: new Date().toLocaleString(),
-            status: 'executed',
-            details: inputValue,
-            cause: victim.cause || 'heart attack'
-          };
-  
-          setMessages([...newMessages, 
-            { id: Date.now() + 2, text: `¡${finalVictim.name} ha sido eliminado!`, sender: 'system' }
-          ]);
-          
-          setVictims(prev => [...prev, finalVictim]);
-          setVictim({});
-          setImagePreview(null);
-          setCurrentStep('name');
-          setTimeLeft(0);
-          return;
-      }
-  
-      setMessages([...newMessages, systemMessage]);
-      setInputValue('');
-    };
-  
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-  
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const imageUrl = reader.result as string;
-        setImagePreview(imageUrl);
-        setVictim(prev => ({ ...prev, image: imageUrl }));
-        
-        setMessages(prev => [...prev, 
-          { id: Date.now(), text: "Imagen subida ✅", sender: 'user' },
-          { id: Date.now() + 1, text: "Especifica la causa de muerte (40s restantes):", sender: 'system' }
-        ]);
-        
-        setCurrentStep('cause');
-        startTimer(40);
-      };
-      reader.readAsDataURL(file);
-    };
-  
-    const handleTimeout = () => {
-      if (!victim.name) return;
-  
-      let finalVictim: Victim;
-      let resultMessage: string;
-  
-      if (currentStep === 'cause' && victim.image) {
-        // Tiempo agotado para causa pero tiene imagen → ataque cardiaco
-        finalVictim = {
-          ...victim as Victim,
-          id: Date.now(),
-          deathTime: new Date().toLocaleString(),
-          status: 'executed',
-          cause: 'heart attack',
-          details: 'Muerte por ataque cardiaco (causa no especificada)'
-        };
-        resultMessage = `💀 ${finalVictim.name} eliminado por ataque cardiaco (tiempo agotado)`;
-      } 
-      else if (currentStep === 'details' && victim.image) {
-        // Tiempo agotado para detalles pero tiene imagen → ataque cardiaco
-        finalVictim = {
-          ...victim as Victim,
-          id: Date.now(),
-          deathTime: new Date().toLocaleString(),
-          status: 'executed',
-          cause: victim.cause || 'heart attack',
-          details: 'Muerte por ' + (victim.cause || 'ataque cardiaco') + ' (detalles no especificados)'
-        };
-        resultMessage = `💀 ${finalVictim.name} eliminado por ${finalVictim.cause} (detalles no especificados)`;
-      }
-      else {
-        // No hay imagen → registro fallido
-        finalVictim = {
-          ...victim as Victim,
-          id: Date.now(),
-          deathTime: new Date().toLocaleString(),
-          status: 'failed',
-          cause: 'Registro fallido: sin imagen'
-        };
-        resultMessage = "⏰ Registro fallido: Se requiere al menos una imagen";
-      }
-  
-      setMessages(prev => [...prev, 
-        { id: Date.now(), text: resultMessage, sender: 'system' }
-      ]);
-      
-      if (victim.image) {
-        setVictims(prev => [...prev, finalVictim]);
-      }
-      
-      setVictim({});
-      setImagePreview(null);
-      setCurrentStep('name');
-      setTimeLeft(0);
-    };
+  }, [timeLeft, currentStep, handleTimeout]);
 
   return (
-    <ChatContainer>
-      <MessagesContainer>
-        {messages.map(message => (
-          <MessageBubble key={message.id} sender={message.sender}>
-            {message.text.split('\n').map((line, i) => (
-              <div key={i}>{line}</div>
-            ))}
-          </MessageBubble>
-        ))}
-        <div ref={messagesEndRef} />
-      </MessagesContainer>
+      <ChatContainer>
+          <MessagesContainer>
+              {messages.map(message => (
+                  <MessageBubble key={message.id} sender={message.sender}>
+                      {message.text.split('\n').map((line, i) => (
+                          <div key={i}>{line}</div>
+                      ))}
+                  </MessageBubble>
+              ))}
+              <div ref={messagesEndRef} />
+          </MessagesContainer>
 
-      <InputContainer>
-        {currentStep !== 'image' ? (
-          <>
-            <ChatInput
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder={
-                currentStep === 'name' ? "Nombre completo..." :
-                currentStep === 'cause' ? "Causa de muerte..." :
-                "Detalles específicos..."
-              }
-            />
-            <ActionButton onClick={handleSubmit}>
-              <FaArrowRight />
-            </ActionButton>
-          </>
-        ) : (
-          <>
-            <ImageUploadLabel>
-              <FaPaperclip />
-              Subir imagen
-              <input type="file" accept="image/*" onChange={handleImageUpload} />
-            </ImageUploadLabel>
-            <ActionButton onClick={handleSubmit}>
-              Omitir
-            </ActionButton>
-          </>
-        )}
-        
-        {timeLeft > 0 && (
-          <TimerDisplay>
-            <FaRegClock />
-            {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-          </TimerDisplay>
-        )}
-      </InputContainer>
-    </ChatContainer>
+          <InputContainer>
+              {currentStep !== 'image' ? (
+                  <>
+                      <ChatInput
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
+                          placeholder={
+                              currentStep === 'name' ? "Nombre y apellido..." :
+                              currentStep === 'cause' ? "Causa de muerte..." :
+                              "Detalles específicos..."
+                          }
+                      />
+                      <ActionButton onClick={handleSubmit}>
+                          <FaArrowRight />
+                      </ActionButton>
+                  </>
+              ) : (
+                  <>
+                      <ImageUploadLabel>
+                          <FaPaperclip />
+                          Subir imagen
+                          <input type="file" accept="image/*" onChange={handleImageUpload} />
+                      </ImageUploadLabel>
+                      <ActionButton onClick={handleSubmit}>
+                          Omitir
+                      </ActionButton>
+                  </>
+              )}
+              
+              {timeLeft > 0 && (
+                  <TimerDisplay>
+                      <FaRegClock />
+                      {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                  </TimerDisplay>
+              )}
+          </InputContainer>
+      </ChatContainer>
   );
 };
 

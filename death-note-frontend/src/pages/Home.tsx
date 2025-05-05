@@ -26,7 +26,7 @@ const Home: React.FC = () => {
       {activeTab === 'deathnote' ? (
         <ChatWindow victims={victims} setVictims={setVictims} />
       ) : (
-        <Notification victims={victims} />
+        <Notification />
       )}
     </HomeContainer>
   );

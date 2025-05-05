@@ -38,58 +38,41 @@ export class VictimService {
   }
 
   @Cron('*/10 * * * * *', { name: 'miCronJobCada10Segundos' })
-  async findAllCron(){
-    const pagination = {
-      limit: 100,
-      offset: 0
-    }
-    var list =await this.findAll(pagination)
-    let listLenght = await list.length
+  async findAllCron() {
+    const pagination = { limit: 100, offset: 0 };
+    const list = await this.findAll(pagination);
     const currentTime = new Date();
-    const adjustedTime = new Date(currentTime.getTime() + 5 * 60 * 60 * 1000);
-
-    for (let i = 0; i < listLenght; i++) {
-      var victim =list[i]
-      if (!victim.isAlive) continue;
-      if (!victim.images) continue;
-
-      if (victim.EditedAt){
-        var difference = adjustedTime.getTime()-victim.EditedAt.getTime();
-      } else{
-        var difference = adjustedTime.getTime()-victim.createdAt.getTime();
+  
+    for (const victim of list) {
+      if (!victim.isAlive || victim.images.length === 0) continue;
+  
+      const referenceTime = victim.EditedAt || victim.createdAt;
+      const difference = currentTime.getTime() - referenceTime.getTime();
+  
+      // Caso 1: Muerte por ataque cardiaco (40 segundos)
+      if (victim.deathType === 'Heart Attack' && difference >= 40 * 1000) {
+        await this.markAsDead(victim.id);
+        continue;
       }
-
-      let id = victim.id;
-
-      if (victim.deathType == 'Heart Attack' && difference >= 40*1000){
-          const victimrepo = await this.victimRepository.preload({
-            id: id,
-            isAlive : false
-          });
-          await this.victimRepository.save(victimrepo);
+  
+      // Caso 2: Con detalles específicos (40 segundos después de agregar detalles)
+      if (victim.details && difference >= 40 * 1000) {
+        await this.markAsDead(victim.id);
+        continue;
       }
-      
-
-      if (victim.isAlive && victim.deathType != 'Heart Attack'){
-        if(victim.details && difference >= 40*1000){
-          const victimrepo = await this.victimRepository.preload({
-            id: id,
-            isAlive : false
-          });
-          await this.victimRepository.save(victimrepo);
-          console.log(victim)
-        }
-        if (difference >= 400*1000){
-          const victimrepo = await this.victimRepository.preload({
-            id: id,
-            isAlive : false
-          });
-          await this.victimRepository.save(victimrepo);
-        }
-        
+  
+      // Caso 3: Sin detalles (6m40s = 400 segundos totales desde creación)
+      if (!victim.details && difference >= 400 * 1000) {
+        await this.markAsDead(victim.id);
       }
     }
-    
+  }
+  
+  private async markAsDead(id: string) {
+    await this.victimRepository.update(id, { 
+      isAlive: false,
+      EditedAt: new Date() 
+    });
   }
 
   async findAll(paginationDto: PaginationDto) {
@@ -160,23 +143,19 @@ export class VictimService {
   }
 
   async updateDeathDetails(id: string, updateDescription: UpdateDescription) {
-
-    const currentTimestamp: Date = new Date();
-    const offset = 5; // Diferencia de +5 horas entre el sistema y PostgreSQL
-    currentTimestamp.setHours(currentTimestamp.getHours() + offset);
-
     const victim = await this.victimRepository.preload({
-      id: id,
-      EditedAt: currentTimestamp,
-      ...updateDescription
+      id,
+      ...updateDescription,
+      EditedAt: new Date() // Asegurar que se actualiza el timestamp
     });
-
-    if(!victim) throw new NotFoundException(`Victim with id ${id} not found`);
+  
+    if (!victim) throw new NotFoundException(`Victim with id ${id} not found`);
+    
     try {
       await this.victimRepository.save(victim);
       return this.findOnePlain(id);
     } catch (error) {
-      throw new InternalServerErrorException('Error al editar DeathDetails')
+      this.handleDBExceptions(error);
     }
   }
 

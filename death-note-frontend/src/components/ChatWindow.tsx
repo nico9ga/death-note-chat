@@ -462,7 +462,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ victims, setVictims }) => {
                       <ImageUploadLabel>
                           <FaPaperclip />
                           Subir imagen
-                          <input type="file" accept="image/*" onChange={handleImageUpload} />
+                          <input type="file" accept="image/*" onChange={handleImageUpload} data-testid="file-input"/>
                       </ImageUploadLabel>
                       <ActionButton onClick={handleSubmit}>
                           Omitir

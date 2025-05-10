@@ -121,6 +121,7 @@ const TimerDisplay = styled.div`
 `;
 const ChatWindow: React.FC<ChatWindowProps> = ({ victims, setVictims }) => {
   const [isInputDisabled, setIsInputDisabled] = useState(false);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -294,6 +295,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ victims, setVictims }) => {
         if (detailsResult) {
           systemMessage.text = "Ejecutando sentencia...";
           setCurrentStep("confirmation");
+          startTimer(40);
           setIsInputDisabled(true);
         } else {
           systemMessage.text = "Error al añadir detalles de la muerte";

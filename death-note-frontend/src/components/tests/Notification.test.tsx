@@ -1,9 +1,9 @@
-// Notification.test.tsx
+
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import Notification from '../Notification';
 
-global.fetch = jest.fn(); // mock global fetch
+global.fetch = jest.fn(); 
 
 const mockVictims = [
   {
@@ -85,13 +85,12 @@ describe('Notification Component', () => {
   
     render(<Notification />);
   
-    // Espera a que se quite el mensaje de carga
     await waitFor(() => expect(screen.queryByText(/loading death records/i)).not.toBeInTheDocument());
   
     const refreshIcon = screen.getByTitle(/refresh notifications/i);
     fireEvent.click(refreshIcon);
   
-    // Espera que fetch haya sido llamado dos veces (1 inicial + 1 por el click)
+
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   });  
 });

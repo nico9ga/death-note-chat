@@ -125,7 +125,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ victims, setVictims }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "Bienvenido a la Death Note. Reglas:\n\n1. Escribe el nombre completo\n2. Sube una foto (opcional)\n3. Tienes 40 segundos para la causa\n4. 6m40s para detalles",
+      text: "Bienvenido a la Death Note. Reglas:\n\n1. Escribe el nombre completo\n2. Sube una foto de un humano(opcional)\n3. Tienes 40 segundos para la causa\n4. 6m40s para detalles",
       sender: "system",
       isInstruction: true,
     },
@@ -212,117 +212,116 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ victims, setVictims }) => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!inputValue.trim() && currentStep !== "image") return;
+const handleSubmit = async () => {
+  if (!inputValue.trim() && currentStep !== "image") return;
 
-    const userMessage: Message = {
-      id: Date.now(),
-      text: inputValue,
-      sender: "user",
-    };
-
-    const newMessages = [...messages, userMessage];
-    let systemMessage: Message = {
-      id: Date.now() + 1,
-      text: "",
-      sender: "system",
-    };
-
-    switch (currentStep) {
-      case "name":
-        const nameParts = inputValue.split(" ");
-        if (nameParts.length < 2) {
-          systemMessage.text =
-            "Debes ingresar nombre y apellido. Intenta de nuevo:";
-          setMessages([...newMessages, systemMessage]);
-          setInputValue("");
-          return;
-        }
-
-        const name = nameParts[0];
-        const lastName = nameParts.slice(1).join(" ");
-        setVictim((prev) => ({ ...prev, name, lastName }));
-        systemMessage.text = "¿Quieres subir una foto? (Opcional)";
-        setCurrentStep("image");
-        break;
-
-      case "image":
-        systemMessage.text =
-          "Especifica la causa de muerte (Opcional - 40s restantes):";
-        setCurrentStep("cause");
-        break;
-
-      case "cause":
-        const deathType = inputValue.trim() ? inputValue : "Heart Attack";
-        setVictim((prev) => ({ ...prev, deathType }));
-
-        const id = await createVictim(
-          victim.name || "",
-          victim.lastName || "",
-          deathType,
-          victim.image // Asegurar que enviamos la imagen
-        );
-
-        if (id) {
-          setVictimId(id);
-          if (inputValue.trim()) {
-            systemMessage.text = "Detalla la muerte (Opcional - 6m40s):";
-            setCurrentStep("details");
-            startTimer(400);
-          } else {
-            systemMessage.text = "Ejecutando sentencia (40s)...";
-            setCurrentStep("confirmation");
-            startTimer(40);
-          }
-        } else {
-          systemMessage.text =
-            "Error al registrar la víctima. Intenta de nuevo.";
-          resetProcess();
-        }
-        break;
-
-      case "details":
-        if (!victimId) {
-          systemMessage.text = "Error: No se encontró el ID de la víctima";
-          resetProcess();
-          return;
-        }
-
-        const detailsResult = inputValue.trim()
-          ? await addDeathDetails(victimId, inputValue)
-          : true;
-
-        if (detailsResult) {
-          systemMessage.text = "Ejecutando sentencia...";
-          setCurrentStep("confirmation");
-          startTimer(40);
-          setIsInputDisabled(true);
-        } else {
-          systemMessage.text = "Error al añadir detalles de la muerte";
-          resetProcess();
-        }
-        break;
-
-      case "confirmation":
-        const victimWithId: Victim = {
-          ...victim,
-          id: victim.id || Date.now().toString(),
-          name: victim.name || "undefined",
-          lastName: victim.lastName || "undefined",
-          deathTime: victim.deathTime || "00/00/00",
-          status: victim.status || "executed",
-        };
-        systemMessage.text = `¡${victim.name} ${victim.lastName} ha sido eliminado!`;
-        setVictims((prev) => [...prev, victimWithId]);
-        resetProcess();
-        break;
-    }
-
-    setMessages([...newMessages, systemMessage]);
-    setInputValue("");
+  const userMessage: Message = {
+    id: Date.now(),
+    text: inputValue,
+    sender: "user",
   };
 
-  // Función auxiliar para resetear el estado
+  const newMessages = [...messages, userMessage];
+  let systemMessage: Message = {
+    id: Date.now() + 1,
+    text: "",
+    sender: "system",
+  };
+
+  switch (currentStep) {
+    case "name":
+      const nameParts = inputValue.split(" ");
+      if (nameParts.length < 2) {
+        systemMessage.text =
+          "Debes ingresar nombre y apellido. Intenta de nuevo:";
+        setMessages([...newMessages, systemMessage]);
+        setInputValue("");
+        return;
+      }
+
+      const name = nameParts[0];
+      const lastName = nameParts.slice(1).join(" ");
+      setVictim((prev) => ({ ...prev, name, lastName }));
+      systemMessage.text = "¿Quieres subir una foto? (Opcional)";
+      setCurrentStep("image");
+      break;
+
+    case "image":
+      systemMessage.text =
+        "Especifica la causa de muerte (Opcional - 40s restantes):";
+      setCurrentStep("cause");
+      break;
+
+    case "cause":
+      const deathType = inputValue.trim() ? inputValue : "Heart Attack";
+      setVictim((prev) => ({ ...prev, deathType }));
+
+      const id = await createVictim(
+        victim.name || "",
+        victim.lastName || "",
+        deathType,
+        victim.image || "" // Envía string vacío si no hay imagen
+      );
+
+      if (id) {
+        setVictimId(id);
+        if (inputValue.trim()) {
+          systemMessage.text = "Detalla la muerte (Opcional - 6m40s):";
+          setCurrentStep("details");
+          startTimer(400);
+        } else {
+          systemMessage.text = "Ejecutando sentencia (40s)...";
+          setCurrentStep("confirmation");
+          startTimer(40);
+        }
+      } else {
+        systemMessage.text = "Error al registrar la víctima. Intenta de nuevo.";
+        resetProcess();
+      }
+      break;
+
+    case "details":
+      if (!victimId) {
+        systemMessage.text = "Error: No se encontró el ID de la víctima";
+        resetProcess();
+        return;
+      }
+
+      const detailsResult = inputValue.trim()
+        ? await addDeathDetails(victimId, inputValue)
+        : true;
+
+      if (detailsResult) {
+        systemMessage.text = "Ejecutando sentencia...";
+        setCurrentStep("confirmation");
+        startTimer(40);
+        setIsInputDisabled(true);
+      } else {
+        systemMessage.text = "Error al añadir detalles de la muerte";
+        resetProcess();
+      }
+      break;
+
+    case "confirmation":
+      const victimWithId: Victim = {
+        ...victim,
+        id: victim.id || Date.now().toString(),
+        name: victim.name || "undefined",
+        lastName: victim.lastName || "undefined",
+        deathTime: victim.deathTime || "00/00/00",
+        status: victim.status || "executed",
+      };
+      systemMessage.text = `¡${victim.name} ${victim.lastName} ha sido eliminado!`;
+      setVictims((prev) => [...prev, victimWithId]);
+      resetProcess();
+      break;
+  }
+
+  setMessages([...newMessages, systemMessage]);
+  setInputValue("");
+};
+
+
   const resetProcess = () => {
     setVictim({});
     setImagePreview(null);
@@ -364,84 +363,77 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ victims, setVictims }) => {
   };
 
   const handleTimeout = async () => {
-    setIsInputDisabled(false);
-    if (!victim.name || !victim.lastName) return;
+  setIsInputDisabled(false);
+  if (!victim.name || !victim.lastName) return;
 
-    let finalVictim: Victim | null = null;
-    let resultMessage: string;
+  let resultMessage: string;
+  let finalVictim: Victim | null = null;
 
-    // Caso 1: Ya tenemos victimId (paso de detalles)
-    if (victimId) {
-      const details =
-        currentStep === "details"
-          ? `Muerte por ${
-              victim.deathType || "ataque cardiaco"
-            } (detalles no especificados)`
-          : victim.details || "";
+  // Si ya tenemos victimId (paso de detalles)
+  if (victimId) {
+    const details =
+      currentStep === "details"
+        ? `Muerte por ${victim.deathType || "ataque cardiaco"} (detalles no especificados)`
+        : victim.details || "";
 
-      if (currentStep === "details") {
-        await addDeathDetails(victimId, details);
-      }
+    if (currentStep === "details") {
+      await addDeathDetails(victimId, details);
+    }
 
+    finalVictim = {
+      ...(victim as Victim),
+      id: victimId,
+      deathTime: new Date().toLocaleString(),
+      deathType: victim.deathType || "Heart Attack",
+      details: details,
+    };
+
+    resultMessage = `💀 ${victim.name} ${victim.lastName} eliminado - ${
+      victim.deathType || "ataque cardiaco"
+    }`;
+  } 
+  // Si no tenemos victimId (paso de causa)
+  else {
+    // Intentar crear la víctima (con o sin imagen)
+    const id = await createVictim(
+      victim.name || "",
+      victim.lastName || "",
+      victim.deathType || "Heart Attack",
+      victim.image || "" // Enviar string vacío si no hay imagen
+    );
+
+    if (id) {
       finalVictim = {
         ...(victim as Victim),
-        id: victimId,
+        id,
         deathTime: new Date().toLocaleString(),
         deathType: victim.deathType || "Heart Attack",
-        details: details,
+        details: victim.details || `Muerte por ${victim.deathType || "ataque cardiaco"}`,
       };
-
-      resultMessage = `💀 ${victim.name} ${victim.lastName} eliminado - ${
+      resultMessage = `💀 ${victim.name} ${victim.lastName} eliminado por ${
         victim.deathType || "ataque cardiaco"
       }`;
+    } else {
+      resultMessage = "Error al registrar la víctima (tiempo agotado)";
     }
-    // Caso 2: No tenemos victimId pero sí imagen
-    else if (victim.image) {
-      const id = await createVictim(
-        victim.name,
-        victim.lastName,
-        victim.deathType || "Heart Attack",
-        victim.image
-      );
+  }
 
-      if (id) {
-        finalVictim = {
-          ...(victim as Victim),
-          id,
-          deathTime: new Date().toLocaleString(),
-          deathType: victim.deathType || "Heart Attack",
-          details:
-            victim.details ||
-            `Muerte por ${victim.deathType || "ataque cardiaco"}`,
-        };
-        resultMessage = `💀 ${victim.name} ${victim.lastName} eliminado por ${
-          victim.deathType || "ataque cardiaco"
-        }`;
-      } else {
-        resultMessage = "Error al registrar la víctima (tiempo agotado)";
-      }
-    }
-    // Caso 3: No hay imagen
-    else {
-      resultMessage = "⏰ Registro fallido: Se requiere al menos una imagen";
-    }
+  setMessages((prev) => [
+    ...prev,
+    { id: Date.now(), text: resultMessage, sender: "system" },
+  ]);
 
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now(), text: resultMessage, sender: "system" },
-    ]);
+  if (finalVictim) {
+    setVictims((prev) => [...prev, finalVictim as Victim]);
+  }
 
-    if (finalVictim) {
-      setVictims((prev) => [...prev, finalVictim as Victim]);
-    }
-
-    // Resetear el proceso
-    setVictim({});
-    setImagePreview(null);
-    setCurrentStep("name");
-    setTimeLeft(0);
-    setVictimId(null);
-  };
+  // Resetear el proceso
+  setVictim({});
+  setImagePreview(null);
+  setCurrentStep("name");
+  setTimeLeft(0);
+  setVictimId(null);
+};
 
   useEffect(() => {
     if (timeLeft <= 0) {

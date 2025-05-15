@@ -1,8 +1,8 @@
 import React from 'react';
 import styled from 'styled-components';
-import { FaBook, FaBell } from 'react-icons/fa';
+import { FaBook, FaBell, FaTable } from 'react-icons/fa';
 
-type ActiveTabType = 'deathnote' | 'notifications';
+type ActiveTabType = 'deathnote' | 'notifications' | 'records';
 
 interface SidebarProps {
   activeTab: ActiveTabType;
@@ -65,6 +65,10 @@ const BellIcon = styled(FaBell)`
   display: block;
 `;
 
+const TableIcon = styled(FaTable)`
+  display: block;
+`;
+
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   return (
     <SidebarContainer>
@@ -81,6 +85,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
         aria-label="Notifications"
       >
         <BellIcon />
+      </IconButton>
+      <IconButton 
+        className={activeTab === 'records' ? 'active' : ''}
+        onClick={() => setActiveTab('records')}
+        aria-label="Records"
+      >
+        <TableIcon />
       </IconButton>
     </SidebarContainer>
   );

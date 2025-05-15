@@ -1,3 +1,3 @@
-En la consola ejecute los siguientes comandos: \n
-docker-compose build \n
+En la consola ejecute los siguientes comandos: 
+docker-compose build
 docker-compose up -d
